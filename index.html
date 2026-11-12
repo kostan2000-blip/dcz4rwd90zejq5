@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Вход</title>
+<style>
+:root{--navy:#16233F;--orange:#F26B21;--bg:#F4F2ED;--line:rgba(22,35,63,.18);--muted:rgba(22,35,63,.7)}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--navy);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;display:grid;place-items:center;padding:16px}
+main{width:min(100%,340px);background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px 24px;text-align:center}
+h1{font-size:19px;font-weight:600;margin:0 0 6px}
+p{margin:0;color:var(--muted);font-size:14px}
+form{margin-top:20px;display:grid;gap:12px}
+input{font:600 30px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.45em;text-align:center;padding:14px 0 14px .45em;border:1.5px solid var(--line);border-radius:10px;color:var(--navy);background:#fff;width:100%}
+input:focus{outline:2px solid var(--orange);outline-offset:1px;border-color:transparent}
+button{font:600 16px/1 inherit;padding:14px;border:0;border-radius:10px;background:var(--navy);color:#fff;cursor:pointer}
+button:disabled{opacity:.55;cursor:default}
+#msg{min-height:20px;margin-top:14px}
+#msg.bad{color:#B4411A}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main id="gate">
+<h1>Вход</h1>
+<p id="hint">Введите код из четырёх цифр</p>
+<form id="f" autocomplete="off">
+<input id="pin" name="code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="Код из четырёх цифр" required>
+<button id="go" type="submit">Войти</button>
+</form>
+<p id="msg" role="status" aria-live="polite"></p>
+</main>
+<script>
+(()=>{
+const CFG={"salt":"tjlA0Fr67vF5aSV8rnNeiQ==","iter":6000000,"check":"BdBwn3UInR8J1LV89Ugbr6u1ppydC2slu7Rr4xzvKjeXIphCKBGcft5zkyGJiO9C8sRsq2k=","payload":"payload.bin?v=20261112T1728-d9024614","build":"20261112T1728-d9024614"};
+const K='d7gate.key',S='d7gate.sec';
+const $=id=>document.getElementById(id);
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const b64e=u=>{let s='';for(const b of u)s+=String.fromCharCode(b);return btoa(s);};
+const get=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+const set=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
+const del=k=>{try{localStorage.removeItem(k);}catch(e){}};
+const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'';};
+let sec=null;
+if(location.hash.startsWith('#k=')){sec=location.hash.slice(3);set(S,sec);history.replaceState(null,'',location.pathname+location.search+'#/');}
+else sec=get(S);
+const importKey=raw=>crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
+const dec=async(key,buf)=>new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:buf.slice(0,12)},key,buf.slice(12)));
+async function derive(pin){
+ const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin+':'+sec),'PBKDF2',false,['deriveBits']);
+ return new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:b64d(CFG.salt),iterations:CFG.iter},base,256));
+}
+async function show(raw){
+ const key=await importKey(raw);
+ try{await dec(key,b64d(CFG.check));}catch(e){const err=new Error('code');err.code=true;throw err;}
+ msg('Загружаю…');
+ const r=await fetch(CFG.payload,{cache:'no-cache'});
+ if(!r.ok)throw new Error('net');
+ const plain=await dec(key,new Uint8Array(await r.arrayBuffer()));
+ if(typeof DecompressionStream!=='function')throw new Error('old');
+ const html=await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+ document.open();document.write(html);document.close();
+}
+function fail(e){
+ $('go').disabled=false;
+ if(e&&e.code){msg('Неверный код',true);$('pin').value='';$('pin').focus();}
+ else if(e&&e.message==='old')msg('Браузер устарел: обновите его и откройте ссылку снова',true);
+ else msg('Не удалось загрузить. Проверьте связь и попробуйте ещё раз',true);
+}
+if(!sec){$('f').hidden=true;$('hint').textContent='Ссылка неполная. Откройте целиком ту ссылку, которую вам прислали.';return;}
+if(!(window.crypto&&crypto.subtle)){$('f').hidden=true;$('hint').textContent='Браузер не поддерживает защищённый вход.';return;}
+const saved=get(K);
+if(saved){$('f').hidden=true;msg('Открываю…');show(b64d(saved)).catch(e=>{if(e&&e.code)del(K);$('f').hidden=false;msg('');if(!(e&&e.code))fail(e);});}
+else $('pin').focus();
+$('f').addEventListener('submit',async ev=>{
+ ev.preventDefault();
+ const pin=$('pin').value.trim();
+ if(!/^\d{4}$/.test(pin)){msg('Нужно четыре цифры',true);return;}
+ $('go').disabled=true;msg('Проверяю…');
+ try{const raw=await derive(pin);await importKey(raw).then(k=>dec(k,b64d(CFG.check))).catch(()=>{const err=new Error('code');err.code=true;throw err;});set(K,b64e(raw));await show(raw);}
+ catch(e){fail(e);}
+});
+})();
+</script>
+</body>
+</html>
