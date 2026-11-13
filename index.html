@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="referrer" content="no-referrer">
-<title>Вход</title>
+<title>РСМ</title>
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="РСМ">
 <style>
 :root{--navy:#16233F;--orange:#F26B21;--bg:#F4F2ED;--line:rgba(22,35,63,.18);--muted:rgba(22,35,63,.7)}
 *{box-sizing:border-box}
@@ -36,7 +39,7 @@ button:disabled{opacity:.55;cursor:default}
 </main>
 <script>
 (()=>{
-const CFG={"salt":"tjlA0Fr67vF5aSV8rnNeiQ==","iter":6000000,"check":"erglXHvwGj4iiAe8xb97KhnM/IQcHhIJJMc7BuAKQrhd0dAWmKkgZgSp4flg2BmVg1/e03k=","payload":"payload.bin?v=20261112T1827-fc6fbd49","build":"20261112T1827-fc6fbd49"};
+const CFG={"salt":"tjlA0Fr67vF5aSV8rnNeiQ==","iter":6000000,"check":"dtOOD1a6FKRwUB8oeEo2H61JcHbBmUUiCLkHuBtPaQ709UaCW3ytN4+TpAuqPYsqPfO5ae8=","payload":"payload.bin?v=20261113T1355-3a74959a","build":"20261113T1355-3a74959a"};
 const K='d7gate.key',S='d7gate.sec';
 const $=id=>document.getElementById(id);
 const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -45,9 +48,9 @@ const get=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const set=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
 const del=k=>{try{localStorage.removeItem(k);}catch(e){}};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'';};
-let sec=null;
-if(location.hash.startsWith('#k=')){sec=location.hash.slice(3);set(S,sec);history.replaceState(null,'',location.pathname+location.search+'#/');}
-else sec=get(S);
+let sec=new URLSearchParams(location.search).get('k');
+if(!sec&&location.hash.startsWith('#k=')){location.replace(location.pathname+'?k='+encodeURIComponent(location.hash.slice(3))+'#/');return;}
+if(sec)set(S,sec);else sec=get(S);
 const importKey=raw=>crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
 const dec=async(key,buf)=>new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:buf.slice(0,12)},key,buf.slice(12)));
 async function derive(pin){
